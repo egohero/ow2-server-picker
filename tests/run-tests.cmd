@@ -23,9 +23,11 @@ echo === firewall COM contract (writes nothing) ===
 build\tests\FirewallProbe.exe || set "FAILED=1"
 
 echo === form construction ===
+rem Globs the whole of src so adding a UI file cannot silently drop it from this test.
+rem /main: picks the harness entry point over Program.Main, which is otherwise ambiguous.
 "%CSC%" /nologo /target:exe /out:build\tests\FormSmoke.exe %GUIREFS% ^
-    src\IpMath.cs src\ServerCatalog.cs src\FirewallManager.cs src\OverwatchLocator.cs ^
-    src\MainForm.cs tests\FormSmoke.cs || exit /b 1
+    /main:Ow2ServerPicker.FormSmoke ^
+    src\*.cs tests\FormSmoke.cs || exit /b 1
 build\tests\FormSmoke.exe || set "FAILED=1"
 
 echo.

@@ -8,230 +8,350 @@ using System.Windows.Forms;
 
 namespace Ow2ServerPicker
 {
-    internal sealed class MainForm : Form
+    internal sealed class MainForm : Form, IMessageFilter
     {
+        private const int WmMouseWheel = 0x020A;
+
         private readonly Catalog _catalog;
         private readonly string _catalogSource;
+        private readonly List<ServerRow> _rows = new List<ServerRow>();
 
-        private ListView _list;
-        private RadioButton _modeAllow;
-        private RadioButton _modeBlock;
-        private Label _pathLabel;
-        private Button _applyButton;
-        private Button _clearButton;
-        private Button _pingButton;
-        private Label _summary;
-        private StatusStrip _status;
-        private ToolStripStatusLabel _statusText;
+        private Segmented _mode;
+        private SmoothPanel _viewport;
+        private SmoothFlow _listFlow;
+        private ThinScrollBar _scroll;
+        private Label _summaryMain;
+        private Label _summarySub;
+        private Label _scopeLabel;
+        private Label _footer;
+        private FlatBtn _apply;
+        private FlatBtn _pingBtn;
+        private FlatBtn _locate;
 
         private string _gamePath;
-        private bool _populating;
         private bool _pinging;
-        private bool _uiReady;
 
         public MainForm(Catalog catalog, string catalogSource)
         {
             _catalog = catalog;
             _catalogSource = catalogSource;
+
+            Theme.Init(this);
             BuildUi();
             Populate();
+
             _gamePath = OverwatchLocator.Find();
-            UpdatePathLabel();
+            UpdateScope();
             RefreshStatus();
             UpdateSummary();
+
+            Application.AddMessageFilter(this);
         }
 
-        // ------------------------------------------------------------------ UI
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Theme.DarkTitleBar(Handle);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            Application.RemoveMessageFilter(this);
+            base.OnFormClosed(e);
+        }
+
+        // ------------------------------------------------------------------ chrome
 
         private void BuildUi()
         {
             Text = "Overwatch 2 Server Picker";
-            AutoScaleMode = AutoScaleMode.Font;
-            Font = new Font("Segoe UI", 9f);
-            ClientSize = new Size(760, 640);
-            MinimumSize = new Size(640, 520);
+            // Sizing is driven by measured text and Theme.S(), so the framework must not
+            // also scale things - that double-application is what clipped the old labels.
+            AutoScaleMode = AutoScaleMode.None;
+            Font = Theme.Body;
+            BackColor = Theme.Bg;
+            ForeColor = Theme.Text;
+            ClientSize = new Size(Theme.S(860), Theme.S(760));
+            MinimumSize = new Size(Theme.S(720), Theme.S(600));
             StartPosition = FormStartPosition.CenterScreen;
 
-            Label heading = new Label
-            {
-                Text = "Choose which datacenters Overwatch is allowed to reach.",
-                Dock = DockStyle.Top,
-                Height = 26,
-                Padding = new Padding(12, 8, 12, 0),
-                Font = new Font("Segoe UI", 9.75f, FontStyle.Bold)
-            };
-
-            _modeAllow = new RadioButton
-            {
-                Text = "Play only on checked servers  (block everything else)",
-                Checked = true,
-                AutoSize = true,
-                Location = new Point(14, 4)
-            };
-            _modeBlock = new RadioButton
-            {
-                Text = "Block checked servers  (leave the rest alone)",
-                AutoSize = true,
-                Location = new Point(14, 26)
-            };
-            _modeAllow.CheckedChanged += delegate { UpdateSummary(); };
-            _modeBlock.CheckedChanged += delegate { UpdateSummary(); };
-
-            Panel modePanel = new Panel { Dock = DockStyle.Top, Height = 52 };
-            modePanel.Controls.Add(_modeAllow);
-            modePanel.Controls.Add(_modeBlock);
-
-            _list = new ListView
+            // One AutoSize-rows table: every band gets exactly the height its content needs,
+            // and only the list stretches. This is what removes the clipping entirely.
+            TableLayoutPanel root = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                View = View.Details,
-                CheckBoxes = true,
-                FullRowSelect = true,
-                GridLines = false,
-                HideSelection = false,
-                ShowGroups = true
+                BackColor = Theme.Bg,
+                ColumnCount = 1,
+                RowCount = 6,
+                Padding = new Padding(Theme.S(24), Theme.S(20), Theme.S(24), Theme.S(14))
             };
-            _list.Columns.Add("Datacenter", 260);
-            _list.Columns.Add("Code", 70);
-            _list.Columns.Add("Ping", 70, HorizontalAlignment.Right);
-            _list.Columns.Add("IP ranges", 80, HorizontalAlignment.Right);
-            _list.ItemChecked += delegate(object sender, ItemCheckedEventArgs e)
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            root.Controls.Add(BuildHeading(), 0, 0);
+            root.Controls.Add(BuildMode(), 0, 1);
+            root.Controls.Add(BuildToolbar(), 0, 2);
+            root.Controls.Add(BuildList(), 0, 3);
+            root.Controls.Add(BuildSummary(), 0, 4);
+            root.Controls.Add(BuildActions(), 0, 5);
+
+            _footer = new Label
             {
-                Datacenter dc = e.Item.Tag as Datacenter;
-                if (dc != null) dc.Selected = e.Item.Checked;
-                if (!_populating && _uiReady) UpdateSummary();
+                Dock = DockStyle.Bottom,
+                Height = Theme.S(30),
+                BackColor = Theme.Surface,
+                ForeColor = Theme.TextFaint,
+                Font = Theme.Small,
+                Padding = new Padding(Theme.S(24), 0, Theme.S(24), 0),
+                TextAlign = ContentAlignment.MiddleLeft
             };
 
-            Panel listHost = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 6, 12, 6) };
-            listHost.Controls.Add(_list);
-
-            FlowLayoutPanel selectBar = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                Height = 36,
-                Padding = new Padding(10, 4, 10, 0),
-                FlowDirection = FlowDirection.LeftToRight
-            };
-            selectBar.Controls.Add(MakeButton("Select all", delegate { SetAll(true); }, 90));
-            selectBar.Controls.Add(MakeButton("Deselect all", delegate { SetAll(false); }, 96));
-            selectBar.Controls.Add(MakeButton("Invert", delegate { Invert(); }, 70));
-            _pingButton = MakeButton("Ping all", delegate { StartPing(); }, 80);
-            selectBar.Controls.Add(_pingButton);
-
-            _summary = new Label
-            {
-                Dock = DockStyle.Top,
-                Height = 40,
-                Padding = new Padding(14, 4, 14, 0),
-                ForeColor = SystemColors.GrayText
-            };
-
-            _pathLabel = new Label
-            {
-                Dock = DockStyle.Top,
-                Height = 34,
-                Padding = new Padding(14, 6, 14, 0),
-                AutoEllipsis = true
-            };
-
-            FlowLayoutPanel actionBar = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                Height = 44,
-                Padding = new Padding(10, 2, 10, 0),
-                FlowDirection = FlowDirection.LeftToRight
-            };
-            _applyButton = MakeButton("Apply", delegate { Apply(); }, 110);
-            _applyButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            actionBar.Controls.Add(_applyButton);
-            _clearButton = MakeButton("Remove all blocks", delegate { ClearRules(); }, 130);
-            actionBar.Controls.Add(_clearButton);
-            actionBar.Controls.Add(MakeButton("Locate Overwatch.exe", delegate { BrowseForGame(); }, 150));
-
-            _statusText = new ToolStripStatusLabel("");
-            _status = new StatusStrip();
-            _status.Items.Add(_statusText);
-
-            Panel bottom = new Panel { Dock = DockStyle.Bottom, Height = 122 };
-            bottom.Controls.Add(actionBar);
-            bottom.Controls.Add(_pathLabel);
-            bottom.Controls.Add(_summary);
-
-            Controls.Add(listHost);
-            Controls.Add(selectBar);
-            Controls.Add(modePanel);
-            Controls.Add(heading);
-            Controls.Add(bottom);
-            Controls.Add(_status);
+            Controls.Add(root);
+            Controls.Add(_footer);
         }
 
-        private static Button MakeButton(string text, EventHandler onClick, int width)
+        /// <summary>Stacks labels top-down, each taking its own measured height.</summary>
+        private static FlowLayoutPanel Stack(int bottomPad)
         {
-            Button b = new Button { Text = text, Width = width, Height = 26, Margin = new Padding(3, 2, 3, 2) };
-            b.Click += onClick;
-            return b;
+            return new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                BackColor = Theme.Bg,
+                Margin = new Padding(0, 0, 0, bottomPad)
+            };
         }
+
+        private static Label Line(string text, Font font, Color ink)
+        {
+            return new Label
+            {
+                Text = text,
+                Font = font,
+                ForeColor = ink,
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, Theme.S(2))
+            };
+        }
+
+        private Control BuildHeading()
+        {
+            FlowLayoutPanel host = Stack(Theme.S(14));
+            host.Controls.Add(Line("Choose where you're willing to play", Theme.H1, Theme.Text));
+            host.Controls.Add(Line(
+                "Checked datacenters stay reachable. Everything else is blocked for Overwatch only.",
+                Theme.Body, Theme.TextDim));
+            return host;
+        }
+
+        private Control BuildMode()
+        {
+            FlowLayoutPanel host = Stack(Theme.S(12));
+            _mode = new Segmented("Play only on checked", "Block checked");
+            _mode.Margin = Padding.Empty;
+            _mode.SelectedChanged += delegate { UpdateSummary(); };
+            host.Controls.Add(_mode);
+            return host;
+        }
+
+        private Control BuildToolbar()
+        {
+            SmoothPanel host = new SmoothPanel
+            {
+                Dock = DockStyle.Top,
+                BackColor = Theme.Bg,
+                Margin = new Padding(0, 0, 0, Theme.S(8))
+            };
+
+            FlowLayoutPanel left = new FlowLayoutPanel
+            {
+                Location = new Point(0, 0),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = false,
+                BackColor = Theme.Bg
+            };
+
+            string[][] actions =
+            {
+                new[] { "Select all", "all" },
+                new[] { "Deselect all", "none" },
+                new[] { "Invert", "invert" },
+            };
+            foreach (string[] a in actions)
+            {
+                FlatBtn b = new FlatBtn(a[0], BtnKind.Ghost).WithHeight(30);
+                string what = a[1];
+                b.Click += delegate
+                {
+                    if (what == "all") SetAll(true);
+                    else if (what == "none") SetAll(false);
+                    else Invert();
+                };
+                left.Controls.Add(b);
+            }
+
+            _pingBtn = new FlatBtn("Ping all", BtnKind.Solid).WithHeight(30);
+            _pingBtn.Click += delegate { StartPing(); };
+
+            host.Height = _pingBtn.Height;
+            host.Controls.Add(left);
+            host.Controls.Add(_pingBtn);
+            host.Resize += delegate { _pingBtn.Location = new Point(host.Width - _pingBtn.Width, 0); };
+            return host;
+        }
+
+        private Control BuildList()
+        {
+            SmoothPanel frame = new SmoothPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Theme.Surface,
+                Padding = new Padding(1),
+                Margin = new Padding(0, 0, 0, Theme.S(14))
+            };
+            frame.Paint += delegate(object s, PaintEventArgs e)
+            {
+                using (Pen p = new Pen(Theme.Border))
+                    e.Graphics.DrawRectangle(p, 0, 0, frame.Width - 1, frame.Height - 1);
+            };
+
+            // AutoScroll is deliberately off: the native scrollbar renders in the system
+            // light theme. The viewport is scrolled by shifting the flow panel instead.
+            _viewport = new SmoothPanel { Dock = DockStyle.Fill, BackColor = Theme.Surface };
+            _listFlow = new SmoothFlow
+            {
+                Location = new Point(0, 0),
+                BackColor = Theme.Surface,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(0, 0, 0, Theme.S(6))
+            };
+
+            _scroll = new ThinScrollBar { Dock = DockStyle.Right };
+            _scroll.ValueChanged += delegate { _listFlow.Top = -_scroll.Value; };
+
+            _viewport.Controls.Add(_listFlow);
+            _viewport.Resize += delegate { LayoutList(); };
+
+            ListHeader header = new ListHeader { Dock = DockStyle.Top };
+
+            frame.Controls.Add(_viewport);
+            frame.Controls.Add(_scroll);
+            frame.Controls.Add(header);
+            return frame;
+        }
+
+        private Control BuildSummary()
+        {
+            FlowLayoutPanel host = Stack(Theme.S(12));
+            _summaryMain = Line("", Theme.Semi, Theme.Text);
+            _summarySub = Line("", Theme.Small, Theme.TextDim);
+            _scopeLabel = Line("", Theme.Small, Theme.TextFaint);
+            host.Controls.Add(_summaryMain);
+            host.Controls.Add(_summarySub);
+            host.Controls.Add(_scopeLabel);
+            return host;
+        }
+
+        private Control BuildActions()
+        {
+            SmoothPanel host = new SmoothPanel { Dock = DockStyle.Top, BackColor = Theme.Bg };
+
+            _apply = new FlatBtn("Apply", BtnKind.Primary).WithHeight(38);
+            _apply.Location = new Point(0, 0);
+            _apply.Click += delegate { Apply(); };
+
+            FlatBtn clear = new FlatBtn("Remove all blocks", BtnKind.Solid).WithHeight(38);
+            clear.Location = new Point(_apply.Width + Theme.S(10), 0);
+            clear.Click += delegate { ClearRules(); };
+
+            _locate = new FlatBtn("Locate Overwatch.exe", BtnKind.Ghost).WithHeight(38);
+            _locate.Click += delegate { BrowseForGame(); };
+
+            host.Height = _apply.Height;
+            host.Controls.Add(_apply);
+            host.Controls.Add(clear);
+            host.Controls.Add(_locate);
+            host.Resize += delegate { _locate.Location = new Point(host.Width - _locate.Width, 0); };
+            return host;
+        }
+
+        // ------------------------------------------------------------------- rows
 
         private void Populate()
         {
-            _populating = true;
-            _list.BeginUpdate();
-            try
+            _listFlow.SuspendLayout();
+            string region = null;
+            foreach (Datacenter dc in _catalog.Datacenters)
             {
-                Dictionary<string, ListViewGroup> groups = new Dictionary<string, ListViewGroup>();
-                foreach (Datacenter dc in _catalog.Datacenters)
+                if (dc.Region != region)
                 {
-                    ListViewGroup g;
-                    if (!groups.TryGetValue(dc.Region, out g))
-                    {
-                        g = new ListViewGroup(dc.Region);
-                        groups[dc.Region] = g;
-                        _list.Groups.Add(g);
-                    }
-
-                    ListViewItem item = new ListViewItem(dc.Name, g);
-                    item.SubItems.Add(dc.Code);
-                    item.SubItems.Add(dc.PingTarget == null ? "-" : "?");
-                    item.SubItems.Add(dc.Ranges.Count.ToString());
-                    item.Tag = dc;
-                    // Everything checked means "block nothing" - a no-op default, so an
-                    // accidental Apply on first launch cannot lock the player out.
-                    item.Checked = dc.Selected;
-                    _list.Items.Add(item);
+                    region = dc.Region;
+                    _listFlow.Controls.Add(new SectionHeader(region));
                 }
+                ServerRow row = new ServerRow(dc);
+                row.CheckedChanged += delegate { UpdateSummary(); };
+                _rows.Add(row);
+                _listFlow.Controls.Add(row);
             }
-            finally
-            {
-                _list.EndUpdate();
-                _populating = false;
-            }
+            _listFlow.ResumeLayout();
+            LayoutList();
         }
 
-        // ------------------------------------------------------------- selection
+        /// <summary>Widths follow the viewport; the scrollbar is told how much content there is.</summary>
+        private void LayoutList()
+        {
+            if (_viewport == null || _listFlow == null) return;
+            int w = _viewport.ClientSize.Width;
+            if (w <= 0) return;
+
+            _listFlow.SuspendLayout();
+            foreach (Control c in _listFlow.Controls) c.Width = w;
+            _listFlow.Width = w;
+            _listFlow.ResumeLayout();
+
+            _scroll.Configure(_listFlow.Height, _viewport.ClientSize.Height);
+            _listFlow.Top = -_scroll.Value;
+        }
 
         private void SetAll(bool value)
         {
-            _populating = true;
-            foreach (ListViewItem i in _list.Items) i.Checked = value;
-            _populating = false;
+            foreach (ServerRow r in _rows) r.SetChecked(value);
             UpdateSummary();
         }
 
         private void Invert()
         {
-            _populating = true;
-            foreach (ListViewItem i in _list.Items) i.Checked = !i.Checked;
-            _populating = false;
+            foreach (ServerRow r in _rows) r.SetChecked(!r.Dc.Selected);
             UpdateSummary();
         }
 
-        protected override void OnShown(EventArgs e)
+        /// <summary>Routes the wheel to the list whenever the pointer is over it, focus or not.</summary>
+        public bool PreFilterMessage(ref Message m)
         {
-            base.OnShown(e);
-            // Safe from here: the native handle exists, so item/Tag mapping is settled.
-            _uiReady = true;
-            UpdateSummary();
+            if (m.Msg != WmMouseWheel || _viewport == null || !_scroll.Needed) return false;
+
+            int lparam = (int)(m.LParam.ToInt64() & 0xFFFFFFFF);
+            Point screen = new Point((short)(lparam & 0xFFFF), (short)((lparam >> 16) & 0xFFFF));
+            if (!_viewport.RectangleToScreen(_viewport.ClientRectangle).Contains(screen)) return false;
+
+            int delta = (short)((m.WParam.ToInt64() >> 16) & 0xFFFF);
+            _scroll.Value -= delta / 120 * Theme.RowHeight * 2;
+            return true;
         }
+
+        // -------------------------------------------------------------- selection
 
         /// <summary>
         /// Turns the current selection into the exact set of intervals to block.
@@ -243,14 +363,14 @@ namespace Ow2ServerPicker
         /// </summary>
         private List<Interval> ComputeBlockSet(out List<Datacenter> kept, out List<Datacenter> kill)
         {
-            bool allowOnly = _modeAllow.Checked;
+            bool allowOnly = _mode.SelectedIndex == 0;
             kept = new List<Datacenter>();
             kill = new List<Datacenter>();
 
             List<Interval> keepRanges = new List<Interval>();
             List<Interval> blockRanges = new List<Interval>();
 
-            // Iterating the catalog, not the ListView: the catalog is always complete,
+            // Iterating the catalog, not the visual rows: the catalog is always complete,
             // so a datacenter can never be silently dropped from the calculation.
             foreach (Datacenter dc in _catalog.Datacenters)
             {
@@ -268,19 +388,49 @@ namespace Ow2ServerPicker
 
             if (kept.Count == 0)
             {
-                _summary.ForeColor = Color.Firebrick;
-                _summary.Text = "Nothing is playable with this selection - every known datacenter "
-                              + "would be blocked. Check at least one server.";
-                _applyButton.Enabled = false;
+                _summaryMain.ForeColor = Theme.Far;
+                _summaryMain.Text = "Nothing would be playable";
+                _summarySub.Text = "Every known datacenter would be blocked. Check at least one server.";
+                _apply.Enabled = false;
                 return;
             }
 
-            _applyButton.Enabled = true;
-            _summary.ForeColor = SystemColors.GrayText;
-            _summary.Text = string.Format(
-                "Playable: {0} datacenter(s).  Blocking {1} of {2} ({3:N0} addresses across {4} rule sets).",
-                kept.Count, kill.Count, kept.Count + kill.Count,
-                IpMath.TotalAddresses(blocked), Math.Max(1, (blocked.Count + 149) / 150));
+            _apply.Enabled = true;
+            _summaryMain.ForeColor = Theme.Text;
+
+            if (blocked.Count == 0)
+            {
+                _summaryMain.Text = "Nothing will be blocked";
+                _summarySub.Text = "All " + kept.Count + " datacenters stay reachable — applying now is a no-op.";
+                return;
+            }
+
+            List<string> names = new List<string>();
+            foreach (Datacenter dc in kept) names.Add(dc.Code);
+            string list = names.Count <= 6
+                ? string.Join(", ", names.ToArray())
+                : string.Join(", ", names.GetRange(0, 6).ToArray()) + " +" + (names.Count - 6) + " more";
+
+            _summaryMain.Text = "Playable: " + list;
+            _summarySub.Text = string.Format(
+                "Blocking {0} of {1} datacenters — {2:N0} addresses across {3} rule(s).",
+                kill.Count, kept.Count + kill.Count,
+                IpMath.TotalAddresses(blocked), (blocked.Count + 149) / 150);
+        }
+
+        private void UpdateScope()
+        {
+            if (string.IsNullOrEmpty(_gamePath))
+            {
+                _scopeLabel.ForeColor = Theme.Mid;
+                _scopeLabel.Text = "Overwatch.exe not found — rules would apply machine-wide. "
+                                 + "Use \"Locate Overwatch.exe\" to scope them to the game.";
+            }
+            else
+            {
+                _scopeLabel.ForeColor = Theme.TextFaint;
+                _scopeLabel.Text = "Scoped to " + _gamePath;
+            }
         }
 
         // ------------------------------------------------------------------ ping
@@ -289,46 +439,35 @@ namespace Ow2ServerPicker
         {
             if (_pinging) return;
             _pinging = true;
-            _pingButton.Enabled = false;
-            _statusText.Text = "Pinging...";
+            _pingBtn.Enabled = false;
+            _pingBtn.Text = "Pinging…";
 
-            List<ListViewItem> items = new List<ListViewItem>();
-            foreach (ListViewItem i in _list.Items) items.Add(i);
-
+            List<ServerRow> rows = new List<ServerRow>(_rows);
             ThreadPool.QueueUserWorkItem(delegate
             {
-                foreach (ListViewItem item in items)
+                foreach (ServerRow row in rows)
                 {
-                    Datacenter dc = (Datacenter)item.Tag;
-                    string text = "-";
-                    if (!string.IsNullOrEmpty(dc.PingTarget))
+                    Datacenter dc = row.Dc;
+                    if (string.IsNullOrEmpty(dc.PingTarget)) continue;
+
+                    long best = -1;
+                    for (int attempt = 0; attempt < 2; attempt++)
                     {
-                        long best = -1;
-                        for (int attempt = 0; attempt < 2; attempt++)
+                        try
                         {
-                            try
+                            using (Ping p = new Ping())
                             {
-                                using (Ping p = new Ping())
-                                {
-                                    PingReply reply = p.Send(dc.PingTarget, 1500);
-                                    if (reply != null && reply.Status == IPStatus.Success)
-                                        if (best < 0 || reply.RoundtripTime < best) best = reply.RoundtripTime;
-                                }
+                                PingReply reply = p.Send(dc.PingTarget, 1500);
+                                if (reply != null && reply.Status == IPStatus.Success)
+                                    if (best < 0 || reply.RoundtripTime < best) best = reply.RoundtripTime;
                             }
-                            catch { }
                         }
-                        text = best < 0 ? "n/a" : best + " ms";
+                        catch { }
                     }
 
-                    string captured = text;
-                    ListViewItem captureItem = item;
-                    try
-                    {
-                        BeginInvoke((MethodInvoker)delegate
-                        {
-                            captureItem.SubItems[2].Text = captured;
-                        });
-                    }
+                    long result = best;
+                    ServerRow target = row;
+                    try { BeginInvoke((MethodInvoker)delegate { target.SetPing(result); }); }
                     catch { return; }
                 }
 
@@ -337,8 +476,10 @@ namespace Ow2ServerPicker
                     BeginInvoke((MethodInvoker)delegate
                     {
                         _pinging = false;
-                        _pingButton.Enabled = true;
-                        _statusText.Text = "Ping complete. Entries showing '-' have no probe address in servers.json.";
+                        _pingBtn.Enabled = true;
+                        _pingBtn.Text = "Ping all";
+                        _footer.Text = "Ping done.  – means no probe address in servers.json; "
+                                     + "n/a means the probe did not answer ICMP.";
                     });
                 }
                 catch { }
@@ -358,23 +499,8 @@ namespace Ow2ServerPicker
                 if (dlg.ShowDialog(this) == DialogResult.OK)
                 {
                     _gamePath = dlg.FileName;
-                    UpdatePathLabel();
+                    UpdateScope();
                 }
-            }
-        }
-
-        private void UpdatePathLabel()
-        {
-            if (string.IsNullOrEmpty(_gamePath))
-            {
-                _pathLabel.ForeColor = Color.DarkOrange;
-                _pathLabel.Text = "Overwatch.exe not found. Rules would apply to the whole machine - "
-                                + "click \"Locate Overwatch.exe\" to scope them to the game instead.";
-            }
-            else
-            {
-                _pathLabel.ForeColor = SystemColors.GrayText;
-                _pathLabel.Text = "Rules apply only to: " + _gamePath;
             }
         }
 
@@ -385,7 +511,7 @@ namespace Ow2ServerPicker
 
             if (blocked.Count == 0)
             {
-                MessageBox.Show(this, "Nothing to block with this selection.", "Overwatch 2 Server Picker",
+                MessageBox.Show(this, "Nothing to block with this selection.", Text,
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -407,12 +533,11 @@ namespace Ow2ServerPicker
             try
             {
                 Cursor = Cursors.WaitCursor;
-                string summary = "Overwatch 2 Server Picker - playable: " + string.Join(", ", keptNames.ToArray());
-                int rules = FirewallManager.Apply(blocked, _gamePath, summary);
+                int rules = FirewallManager.Apply(blocked, _gamePath,
+                    "Overwatch 2 Server Picker - playable: " + string.Join(", ", keptNames.ToArray()));
                 RefreshStatus();
                 MessageBox.Show(this,
-                    string.Format(
-                        "Created {0} firewall rule(s).\r\n\r\nPlayable datacenters: {1}\r\n\r\n"
+                    string.Format("Created {0} firewall rule(s).\r\n\r\nPlayable: {1}\r\n\r\n"
                         + "Fully quit and relaunch Overwatch for this to take effect.",
                         rules, string.Join(", ", keptNames.ToArray())),
                     "Applied", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -451,14 +576,13 @@ namespace Ow2ServerPicker
             try
             {
                 int active = FirewallManager.ListOurRuleNames().Count;
-                _statusText.Text = string.Format(
-                    "{0}  |  catalog {1} ({2} datacenters, updated {3})",
+                _footer.Text = string.Format("{0}   ·   {1} datacenters from {2}, updated {3}",
                     active == 0 ? "No blocks active" : active + " block rule(s) active",
-                    Path.GetFileName(_catalogSource), _catalog.Datacenters.Count, _catalog.Updated);
+                    _catalog.Datacenters.Count, Path.GetFileName(_catalogSource), _catalog.Updated);
             }
             catch (Exception ex)
             {
-                _statusText.Text = "Firewall status unavailable: " + ex.Message;
+                _footer.Text = "Firewall status unavailable: " + ex.Message;
             }
         }
     }
