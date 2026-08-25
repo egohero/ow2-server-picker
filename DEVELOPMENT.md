@@ -180,8 +180,8 @@ hand-edit it.
 
 Nothing is hand-maintained on purpose: a version someone must remember to bump is one that
 silently goes stale, and a stale version is worse than none because it actively asserts you
-are running something you are not. That already happened once here — `D:\Tools` ran a build
-half an hour old while everything reported success.
+are running something you are not. That already happened once here — an install folder ran a
+build half an hour old while everything reported success.
 
 The constants are `const string`, hence legal inside the assembly attributes in
 `AssemblyInfo.cs`, so Explorer's Details tab and the UI cannot disagree.
@@ -205,7 +205,7 @@ with PNG-compressed entries, not a malformed file. The Windows shell reads it co
 Verified on Windows 11 (2026-08-26): build, all 30 unit assertions, firewall COM probe, form
 construction, and the **live apply path end to end** — `FirewallManager.Apply` with a real
 "SYD2 only" selection produced one rule (`OW2ServerPicker-01`, outbound / block / UDP / 149
-ranges) scoped to `D:\Program Files (x86)\Overwatch\_retail_\Overwatch.exe`.
+ranges) scoped to the detected `_retail_\Overwatch.exe`.
 
 Cross-checked two ways rather than trusting the writing API: read back via `Get-NetFirewallRule`
 (NetSecurity module, independent of the COM path that created it), then all 63 SYD2 boundary and

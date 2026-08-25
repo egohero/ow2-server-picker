@@ -7,29 +7,39 @@ on:
   pull_request:
     branches: [main]
 
+# gh release create needs write access; the default token is read-only.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # tools/gen-version.ps1 derives the patch number from the commit count, and a
+          # shallow clone reports 1. Without this every release would build as 1.0.1.
+          fetch-depth: 0
 
       - name: Run tests
         shell: cmd
-        run: tests\run-tests.cmd
+        run: .\tests\run-tests.cmd
 
       - name: Build
         shell: cmd
-        run: build.cmd
+        run: .\build.cmd
 
       - name: Stage release files
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          New-Item -ItemType Directory -Path dist\tools -Force | Out-Null
           Copy-Item build\Ow2ServerPicker.exe dist\
           Copy-Item data\servers.json dist\
           Copy-Item README.md, LICENSE, install.cmd, uninstall.cmd dist\
-          New-Item -ItemType Directory -Path dist\tools -Force | Out-Null
           Copy-Item tools\capture-server.ps1 dist\tools\
+          $v = (Get-Item build\Ow2ServerPicker.exe).VersionInfo.FileVersion
+          Write-Host "staged version $v"
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - uses: actions/upload-artifact@v4
         with:
@@ -40,8 +50,10 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
-          Compress-Archive -Path dist\* -DestinationPath Ow2ServerPicker.zip
-          gh release create "$env:GITHUB_REF_NAME" Ow2ServerPicker.zip `
-            --title "$env:GITHUB_REF_NAME" --generate-notes
+          Compress-Archive -Path dist\* -DestinationPath Ow2ServerPicker.zip -Force
+          gh release create "$env:GITHUB_REF_NAME" `
+            Ow2ServerPicker.zip `
+            --title "$env:GITHUB_REF_NAME" `
+            --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
