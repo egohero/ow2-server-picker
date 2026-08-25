@@ -19,7 +19,7 @@ enforced with Windows Firewall rules.
 | `src/IpMath.cs` | IPv4 interval parse / merge / **subtract**. The load-bearing logic. |
 | `src/ServerCatalog.cs` | Loads `servers.json`; holds `Datacenter.Selected` (source of truth). |
 | `src/FirewallManager.cs` | Firewall rules via COM (`HNetCfg.FwPolicy2`), not netsh. |
-| `src/OverwatchLocator.cs` | Finds `Overwatch.exe` (running process → registry → drive scan). |
+| `src/OverwatchLocator.cs` | Finds the client: running game → Battle.net → registry → scan. |
 | `src/Sorting.cs` | Column ordering rules. No UI types, so it is testable headlessly. |
 | `src/MainForm.cs` | UI; `ComputeBlockSet()` is where selection becomes intervals. |
 
