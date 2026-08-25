@@ -20,6 +20,9 @@ namespace Ow2ServerPicker
         private SmoothPanel _viewport;
         private SmoothFlow _listFlow;
         private ThinScrollBar _scroll;
+        private ListHeader _header;
+        private readonly Dictionary<string, SectionHeader> _sections =
+            new Dictionary<string, SectionHeader>();
         private Label _summaryMain;
         private Label _summarySub;
         private Label _scopeLabel;
@@ -261,11 +264,16 @@ namespace Ow2ServerPicker
             _viewport.Controls.Add(_listFlow);
             _viewport.Resize += delegate { LayoutList(); };
 
-            ListHeader header = new ListHeader { Dock = DockStyle.Top };
+            _header = new ListHeader { Dock = DockStyle.Top };
+            _header.SortChanged += delegate { RebuildList(); };
+
+            ToolTip tip = new ToolTip();
+            tip.SetToolTip(_header,
+                "Click a column to sort. Click again to reverse, a third time to group by region.");
 
             frame.Controls.Add(_viewport);
             frame.Controls.Add(_scroll);
-            frame.Controls.Add(header);
+            frame.Controls.Add(_header);
             return frame;
         }
 
@@ -308,22 +316,61 @@ namespace Ow2ServerPicker
 
         private void Populate()
         {
-            _listFlow.SuspendLayout();
-            string region = null;
             foreach (Datacenter dc in _catalog.Datacenters)
             {
-                if (dc.Region != region)
-                {
-                    region = dc.Region;
-                    _listFlow.Controls.Add(new SectionHeader(region));
-                }
                 ServerRow row = new ServerRow(dc);
                 row.CheckedChanged += delegate { UpdateSummary(); };
                 _rows.Add(row);
-                _listFlow.Controls.Add(row);
+
+                if (!_sections.ContainsKey(dc.Region))
+                    _sections[dc.Region] = new SectionHeader(dc.Region);
             }
+            RebuildList();
+        }
+
+        /// <summary>
+        /// Rebuilds the list for the current sort. Region captions only make sense in the
+        /// default order - once a sort is active the point is to compare across regions,
+        /// so the list goes flat.
+        ///
+        /// Rows and section headers are reused rather than recreated: Controls.Clear does
+        /// not dispose them, so rebuilding is just a reparent and per-row state such as a
+        /// measured ping survives.
+        /// </summary>
+        private void RebuildList()
+        {
+            _listFlow.SuspendLayout();
+            _listFlow.Controls.Clear();
+
+            if (_header.Key == SortKey.None)
+            {
+                string region = null;
+                foreach (Datacenter dc in _catalog.Datacenters)   // catalog is already region-ordered
+                {
+                    if (dc.Region != region)
+                    {
+                        region = dc.Region;
+                        _listFlow.Controls.Add(_sections[region]);
+                    }
+                    _listFlow.Controls.Add(RowFor(dc));
+                }
+            }
+            else
+            {
+                List<ServerRow> sorted = new List<ServerRow>(_rows);
+                Sorting.Sort(sorted, _header.Key, _header.Descending);
+                foreach (ServerRow r in sorted) _listFlow.Controls.Add(r);
+            }
+
             _listFlow.ResumeLayout();
             LayoutList();
+            _scroll.Value = 0;
+        }
+
+        private ServerRow RowFor(Datacenter dc)
+        {
+            foreach (ServerRow r in _rows) if (r.Dc == dc) return r;
+            return null;
         }
 
         /// <summary>Widths follow the viewport; the scrollbar is told how much content there is.</summary>
@@ -495,6 +542,8 @@ namespace Ow2ServerPicker
                         _pinging = false;
                         _pingBtn.Enabled = true;
                         _pingBtn.Text = "Ping all";
+                        // Fresh numbers under a stale ping order would be actively wrong.
+                        if (_header.Key == SortKey.Ping) RebuildList();
                         _footer.Text = "Ping done.  – means no probe address in servers.json; "
                                      + "n/a means the probe did not answer ICMP.";
                     });

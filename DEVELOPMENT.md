@@ -20,7 +20,27 @@ enforced with Windows Firewall rules.
 | `src/ServerCatalog.cs` | Loads `servers.json`; holds `Datacenter.Selected` (source of truth). |
 | `src/FirewallManager.cs` | Firewall rules via COM (`HNetCfg.FwPolicy2`), not netsh. |
 | `src/OverwatchLocator.cs` | Finds `Overwatch.exe` (running process → registry → drive scan). |
+| `src/Sorting.cs` | Column ordering rules. No UI types, so it is testable headlessly. |
 | `src/MainForm.cs` | UI; `ComputeBlockSet()` is where selection becomes intervals. |
+
+## Sorting
+
+All four column headers sort on click, cycling ascending → descending → back to the default
+region grouping. That third state is not optional: once a sort flattens the list there is
+otherwise no way back to the grouped view.
+
+Region captions only appear in the unsorted state. The point of sorting is to compare across
+regions, so `RebuildList()` drops the `SectionHeader` rows entirely when a sort is active.
+
+Two rules worth preserving:
+- **Rows with no ping reading sink to the bottom in BOTH directions.** An unmeasured
+  datacenter is unknown, not slow; letting one head a descending sort asserts something the
+  data does not support.
+- **Name is the tiebreak everywhere**, which also makes repeated sorts stable rather than
+  reshuffling equal rows under the user.
+
+`Sorting` works against `ISortableRow` rather than `ServerRow` so `tests/SelfTest.cs` can
+cover the ordering with a plain stub and no WinForms references.
 
 Catalog resolution: `servers.json` beside the exe wins; otherwise the copy embedded via
 `/resource:` at build time. Rules are always named `OW2ServerPicker-NN`.

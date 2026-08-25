@@ -5,7 +5,7 @@ using System.Windows.Forms;
 
 namespace Ow2ServerPicker
 {
-    /// <summary>A region caption inside the server list.</summary>
+    /// <summary>A region caption inside the server list. Only shown when unsorted.</summary>
     internal sealed class SectionHeader : Control
     {
         public SectionHeader(string title)
@@ -29,39 +29,151 @@ namespace Ow2ServerPicker
         }
     }
 
-    /// <summary>Column captions for the server list, sharing Theme's column geometry.</summary>
+    /// <summary>
+    /// Clickable column captions, sharing Theme's column geometry with ServerRow.
+    ///
+    /// Each header cycles through three states: ascending, descending, then back to the
+    /// default region grouping. The third state matters - once a sort flattens the list,
+    /// there would otherwise be no way back to the grouped view.
+    /// </summary>
     internal sealed class ListHeader : Control
     {
+        private struct Col
+        {
+            public string Label;
+            public SortKey Key;
+            public int RightInset;
+            public bool LeftAligned;
+        }
+
+        public SortKey Key = SortKey.None;
+        public bool Descending;
+
+        public event EventHandler SortChanged;
+
+        private SortKey _hot = SortKey.None;
+
         public ListHeader()
         {
             Height = Theme.S(34);
             Margin = Padding.Empty;
+            Cursor = Cursors.Hand;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
                      | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+        }
+
+        private Col[] Columns()
+        {
+            return new[]
+            {
+                new Col { Label = "DATACENTER", Key = SortKey.Name,   RightInset = 0, LeftAligned = true },
+                new Col { Label = "CODE",       Key = SortKey.Code,   RightInset = Theme.CodeRight },
+                new Col { Label = "PING",       Key = SortKey.Ping,   RightInset = Theme.PingRight },
+                new Col { Label = "RANGES",     Key = SortKey.Ranges, RightInset = Theme.RangeRight },
+            };
+        }
+
+        /// <summary>The clickable band for a column: its label plus room for the arrow.</summary>
+        private Rectangle Band(Col c)
+        {
+            int pad = Theme.S(8);
+            int arrow = Theme.S(14);
+            int labelW = Theme.TextWidth(c.Label, Theme.Eyebrow);
+
+            if (c.LeftAligned)
+            {
+                int w = labelW + arrow + pad;
+                return new Rectangle(Theme.NameLeft - pad, 0, w, Height);
+            }
+            int right = Width - c.RightInset;
+            int width = labelW + arrow + pad;
+            return new Rectangle(right - width + pad, 0, width, Height);
+        }
+
+        private bool TryHit(int x, out Col hit)
+        {
+            hit = default(Col);
+            foreach (Col c in Columns())
+            {
+                Rectangle b = Band(c);
+                if (x >= b.Left && x <= b.Right) { hit = c; return true; }
+            }
+            return false;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            Col c;
+            SortKey k = TryHit(e.X, out c) ? c.Key : SortKey.None;
+            if (k != _hot) { _hot = k; Invalidate(); }
+            Cursor = k == SortKey.None ? Cursors.Default : Cursors.Hand;
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _hot = SortKey.None;
+            Invalidate();
+            base.OnMouseLeave(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            Col c;
+            if (TryHit(e.X, out c))
+            {
+                if (Key != c.Key) { Key = c.Key; Descending = false; }
+                else if (!Descending) { Descending = true; }
+                else { Key = SortKey.None; Descending = false; }
+
+                Invalidate();
+                if (SortChanged != null) SortChanged(this, EventArgs.Empty);
+            }
+            base.OnMouseDown(e);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
             g.Clear(Theme.Surface);
 
-            TextRenderer.DrawText(g, "DATACENTER", Theme.Eyebrow,
-                new Rectangle(Theme.NameLeft, 0, Theme.S(240), Height), Theme.TextFaint,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            foreach (Col c in Columns())
+            {
+                bool active = Key == c.Key;
+                Color ink = active ? Theme.Accent : (_hot == c.Key ? Theme.TextDim : Theme.TextFaint);
+                int labelW = Theme.TextWidth(c.Label, Theme.Eyebrow);
 
-            DrawRight(g, "CODE", Theme.CodeRight);
-            DrawRight(g, "PING", Theme.PingRight);
-            DrawRight(g, "RANGES", Theme.RangeRight);
+                if (c.LeftAligned)
+                {
+                    TextRenderer.DrawText(g, c.Label, Theme.Eyebrow,
+                        new Rectangle(Theme.NameLeft, 0, labelW + Theme.S(4), Height), ink,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                    if (active) DrawArrow(g, Theme.NameLeft + labelW + Theme.S(6), ink);
+                }
+                else
+                {
+                    int right = Width - c.RightInset;
+                    TextRenderer.DrawText(g, c.Label, Theme.Eyebrow,
+                        new Rectangle(0, 0, right, Height), ink,
+                        TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                    if (active) DrawArrow(g, right - labelW - Theme.S(13), ink);
+                }
+            }
 
             using (Pen p = new Pen(Theme.Border))
                 g.DrawLine(p, 0, Height - 1, Width, Height - 1);
         }
 
-        private void DrawRight(Graphics g, string text, int rightInset)
+        private void DrawArrow(Graphics g, int x, Color ink)
         {
-            Rectangle r = new Rectangle(0, 0, Width - rightInset, Height);
-            TextRenderer.DrawText(g, text, Theme.Eyebrow, r, Theme.TextFaint,
-                TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            int w = Theme.S(7);
+            int h = Theme.S(4);
+            int cy = Height / 2;
+            Point[] pts = Descending
+                ? new[] { new Point(x, cy - h / 2), new Point(x + w, cy - h / 2), new Point(x + w / 2, cy + h) }
+                : new[] { new Point(x, cy + h / 2), new Point(x + w, cy + h / 2), new Point(x + w / 2, cy - h) };
+            using (SolidBrush b = new SolidBrush(ink)) g.FillPolygon(b, pts);
         }
     }
 
@@ -70,13 +182,23 @@ namespace Ow2ServerPicker
     /// control cannot be themed past a point, and its checkbox hit-testing was the source of a
     /// startup crash earlier in this project's history.
     /// </summary>
-    internal sealed class ServerRow : Control
+    internal sealed class ServerRow : Control, ISortableRow
     {
         public readonly Datacenter Dc;
         private bool _hot;
         private long _ping = -2; // -2 = never measured, -1 = no reply
 
         public event EventHandler CheckedChanged;
+
+        /// <summary>Round-trip in ms, or negative when there is no usable reading.</summary>
+        public long PingMs { get { return _ping; } }
+
+        public bool HasPing { get { return _ping >= 0; } }
+
+        string ISortableRow.SortName { get { return Dc.Name; } }
+        string ISortableRow.SortCode { get { return Dc.Code; } }
+        int ISortableRow.SortRanges { get { return Dc.Ranges.Count; } }
+        long ISortableRow.SortPing { get { return _ping; } }
 
         public ServerRow(Datacenter dc)
         {

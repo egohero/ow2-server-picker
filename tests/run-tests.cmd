@@ -13,7 +13,7 @@ set "FAILED=0"
 
 echo === interval arithmetic and catalog ===
 "%CSC%" /nologo /target:exe /out:build\tests\SelfTest.exe %REFS% ^
-    src\IpMath.cs src\ServerCatalog.cs tests\SelfTest.cs || exit /b 1
+    src\IpMath.cs src\ServerCatalog.cs src\Sorting.cs tests\SelfTest.cs || exit /b 1
 copy /y data\servers.json build\tests\servers.json >nul
 build\tests\SelfTest.exe || set "FAILED=1"
 

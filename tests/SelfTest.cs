@@ -37,6 +37,79 @@ namespace Ow2ServerPicker
             return false;
         }
 
+
+        private sealed class Row : ISortableRow
+        {
+            public string N; public string C; public int R; public long P; public bool Has;
+            public string SortName { get { return N; } }
+            public string SortCode { get { return C; } }
+            public int SortRanges { get { return R; } }
+            public long SortPing { get { return P; } }
+            public bool HasPing { get { return Has; } }
+        }
+
+        private static Row Mk(string name, string code, int ranges, long ping)
+        {
+            return new Row { N = name, C = code, R = ranges, P = ping, Has = ping >= 0 };
+        }
+
+        private static string Order(List<Row> rows, SortKey key, bool desc)
+        {
+            List<Row> copy = new List<Row>(rows);
+            Sorting.Sort(copy, key, desc);
+            List<string> names = new List<string>();
+            foreach (Row r in copy) names.Add(r.N);
+            return string.Join(",", names.ToArray());
+        }
+
+        private static void SortTests()
+        {
+            Console.WriteLine();
+            Console.WriteLine("Sorting");
+
+            List<Row> rows = new List<Row>
+            {
+                Mk("Sydney",    "SYD2",  21,  29),
+                Mk("Singapore", "GSG1",  59, 121),
+                Mk("Amsterdam", "AMS1",   2,  -1),   // probe silent
+                Mk("Bahrain",   "MES1",   4,  -2),   // never measured
+                Mk("Chicago",   "ORD1",  79, 210),
+            };
+
+            Check(Order(rows, SortKey.Ping, false).StartsWith("Sydney,Singapore,Chicago"),
+                "ping ascending puts the closest first");
+            Check(Order(rows, SortKey.Ping, true).StartsWith("Chicago,Singapore,Sydney"),
+                "ping descending reverses the measured rows");
+
+            // The rule that matters: absence is not slowness.
+            Check(Order(rows, SortKey.Ping, false).EndsWith("Amsterdam,Bahrain"),
+                "unmeasured rows sink in ascending order");
+            Check(Order(rows, SortKey.Ping, true).EndsWith("Amsterdam,Bahrain"),
+                "unmeasured rows ALSO sink in descending order");
+
+            Check(Order(rows, SortKey.Ranges, false) == "Amsterdam,Bahrain,Sydney,Singapore,Chicago",
+                "ranges ascending is numeric, not lexicographic");
+            Check(Order(rows, SortKey.Ranges, true) == "Chicago,Singapore,Sydney,Bahrain,Amsterdam",
+                "ranges descending reverses");
+
+            Check(Order(rows, SortKey.Name, false) == "Amsterdam,Bahrain,Chicago,Singapore,Sydney",
+                "name ascending is alphabetical");
+            Check(Order(rows, SortKey.Code, false) == "Amsterdam,Singapore,Bahrain,Chicago,Sydney",
+                "code ascending sorts by datacenter code");
+
+            // Ties must not shuffle, or repeated sorts would reorder the list under the user.
+            List<Row> ties = new List<Row>
+            {
+                Mk("Delta", "D1", 5, 100), Mk("Alpha", "A1", 5, 100), Mk("Charlie", "C1", 5, 100),
+            };
+            Check(Order(ties, SortKey.Ranges, false) == "Alpha,Charlie,Delta", "ties break by name");
+            Check(Order(ties, SortKey.Ranges, true) == "Alpha,Charlie,Delta",
+                "ties break by name in descending too, so order is stable");
+
+            Check(Order(rows, SortKey.None, false) == Order(rows, SortKey.None, false),
+                "SortKey.None is a no-op comparison");
+        }
+
         private static int Main(string[] args)
         {
             Console.WriteLine();
@@ -146,6 +219,8 @@ namespace Ow2ServerPicker
                     "        ({0} intervals blocked, {1:N0} addresses, {2} rule set(s))",
                     blocked.Count, IpMath.TotalAddresses(blocked), (blocked.Count + 149) / 150));
             }
+
+            SortTests();
 
             Console.WriteLine();
             Console.WriteLine(string.Format("{0} passed, {1} failed", _passed, _failed));
