@@ -51,11 +51,11 @@ Catalog resolution: `servers.json` beside the exe wins; otherwise the copy embed
   `34.124.40.0/23`. Windows Firewall prefers Block over Allow, so per-datacenter block rules
   would kill the datacenter the user kept. Everything must go through
   `IpMath.Subtract(rejected, kept)`. `tests/SelfTest.cs` asserts this against the real catalog.
-- **Never read selection state off the ListView.** `ListView.OnHandleCreated` re-inserts items
-  and fires `ItemChecked` while `Tag` is still unmapped — that caused a startup
-  `NullReferenceException` inside the message loop, which surfaces only as a modal
-  "Microsoft .NET Framework" dialog. State lives on `Datacenter.Selected`; `_uiReady` gates
-  recomputation until `OnShown`.
+- **Do not reintroduce a `ListView` for the server list.** It was replaced by custom-drawn
+  `ServerRow` controls, partly for theming and partly because `ListView.OnHandleCreated`
+  re-inserts items and fires `ItemChecked` while `Tag` is still unmapped — that caused a
+  startup `NullReferenceException` inside the message loop. Selection state lives on
+  `Datacenter.Selected`, never read back off a control.
 - **A WinForms exception in the message loop looks like a hang, not a crash.** To debug, call
   `Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException)` — see
   `tests/FormSmoke.cs`.

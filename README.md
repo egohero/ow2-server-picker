@@ -4,12 +4,11 @@ A small Windows app that lets you choose which Overwatch 2 datacenters you are w
 play on. Check the ones you want, hit Apply, and the rest are blocked with Windows Firewall
 rules scoped to Overwatch itself.
 
-No installer, no runtime to download, no dependencies. One ~40 KB executable and a JSON file.
+No runtime to download, no dependencies. One ~100 KB executable and a JSON file.
 
 ```
 ┌─ Overwatch 2 Server Picker ─────────────────────────────────┐
-│ ● Play only on checked servers  (block everything else)     │
-│ ○ Block checked servers  (leave the rest alone)             │
+│ [ Play only on checked ][ Block checked ]                   │
 │                                                             │
 │ [Select all] [Deselect all] [Invert] [Ping all]             │
 │                                                             │
@@ -50,12 +49,27 @@ executable. If it cannot find the game it says so and asks before writing anythi
 
 ## Install
 
-Download `Ow2ServerPicker.exe` and `servers.json` from
-[Releases](../../releases), put them in the same folder, and run the exe. It requests
-administrator rights, because creating firewall rules requires them.
+Download the release archive from [Releases](../../releases), extract it, and run
+**`install.cmd`**. It copies the app to `%LOCALAPPDATA%\Programs\Ow2ServerPicker` and adds a
+Start Menu entry — no administrator rights needed for the install itself.
 
-To uninstall: click **Remove all blocks**, then delete the two files. Every rule the app
-creates is named `OW2ServerPicker-NN`, so you can also verify or remove them yourself:
+Then press Start and type "Overwatch".
+
+The app requests administrator rights when it launches. That is required to create Windows
+Firewall rules and is the only thing it uses them for.
+
+Prefer to place it yourself? Just keep `Ow2ServerPicker.exe` and `servers.json` in the same
+folder and run the exe — the `servers.json` beside it overrides the catalog embedded in the
+build, which is how you edit ranges without rebuilding.
+
+### Uninstall
+
+Run **`uninstall.cmd`** from the install folder. It removes the firewall rules *first* — that
+ordering matters, because deleting the app while blocks are active would leave Overwatch
+restricted with nothing on the machine that knows how to undo it. It then removes the Start
+Menu entry and the files.
+
+To check or clear the rules by hand at any time:
 
 ```bash
 powershell -Command "Get-NetFirewallRule -DisplayName 'OW2ServerPicker*' | Format-Table DisplayName,Enabled,Action"
@@ -73,8 +87,10 @@ powershell -Command "Get-NetFirewallRule -DisplayName 'OW2ServerPicker*' | Forma
    convenience for choosing servers, not a reachability test.
 3. **Apply**, then fully quit and relaunch Overwatch.
 
-Everything starts checked, which means "block nothing" — an accidental Apply on first launch
-cannot lock you out.
+On launch the app reads the rules already in your firewall and shows that selection, so a
+restart reflects what is actually in force rather than a remembered guess. With no rules
+active it opens with everything checked, which means "block nothing" — an accidental Apply on
+a fresh install cannot lock you out.
 
 ## What this costs you
 

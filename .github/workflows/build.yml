@@ -27,7 +27,7 @@ jobs:
           New-Item -ItemType Directory -Path dist -Force | Out-Null
           Copy-Item build\Ow2ServerPicker.exe dist\
           Copy-Item data\servers.json dist\
-          Copy-Item README.md, LICENSE dist\
+          Copy-Item README.md, LICENSE, install.cmd, uninstall.cmd dist\
           New-Item -ItemType Directory -Path dist\tools -Force | Out-Null
           Copy-Item tools\capture-server.ps1 dist\tools\
 
