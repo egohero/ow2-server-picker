@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Net.NetworkInformation;
+using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -71,7 +72,7 @@ namespace Ow2ServerPicker
 
         private void BuildUi()
         {
-            Text = "Overwatch 2 Server Picker";
+            Text = "Overwatch 2 Server Picker  " + VersionShort();
             LoadAppIcon();
             // Sizing is driven by measured text and Theme.S(), so the framework must not
             // also scale things - that double-application is what clipped the old labels.
@@ -121,6 +122,36 @@ namespace Ow2ServerPicker
 
             Controls.Add(root);
             Controls.Add(_footer);
+        }
+
+        /// <summary>
+        /// Version plus the binary's own timestamp. The timestamp answers "am I running the
+        /// build I just made?", which the version number alone cannot - it survives a file
+        /// copy, so an install folder that was never updated shows its real age.
+        /// </summary>
+        private static string VersionLine()
+        {
+            try
+            {
+                Assembly a = Assembly.GetExecutingAssembly();
+                string v = a.GetName().Version.ToString(3);
+                string built = "";
+                try
+                {
+                    string loc = a.Location;
+                    if (!string.IsNullOrEmpty(loc) && File.Exists(loc))
+                        built = File.GetLastWriteTime(loc).ToString(" (built d MMM yyyy HH:mm)");
+                }
+                catch { }
+                return "v" + v + built;
+            }
+            catch { return ""; }
+        }
+
+        private static string VersionShort()
+        {
+            try { return "v" + Assembly.GetExecutingAssembly().GetName().Version.ToString(3); }
+            catch { return ""; }
         }
 
         /// <summary>
@@ -717,13 +748,13 @@ namespace Ow2ServerPicker
                 int active = FirewallManager.ListOurRuleNames().Count;
                 if (!string.IsNullOrEmpty(_restoredNote))
                 {
-                    _footer.Text = _restoredNote;
+                    _footer.Text = _restoredNote + "   ·   " + VersionLine();
                     _restoredNote = null;   // shown once; later refreshes report live status
                     return;
                 }
-                _footer.Text = string.Format("{0}   ·   {1} datacenters from {2}, updated {3}",
+                _footer.Text = string.Format("{0}   ·   {1} datacenters, catalog {2}   ·   {3}",
                     active == 0 ? "No blocks active" : active + " block rule(s) active",
-                    _catalog.Datacenters.Count, Path.GetFileName(_catalogSource), _catalog.Updated);
+                    _catalog.Datacenters.Count, _catalog.Updated, VersionLine());
             }
             catch (Exception ex)
             {
