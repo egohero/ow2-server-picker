@@ -33,6 +33,7 @@ namespace Ow2ServerPicker
 
         private string _gamePath;
         private bool _pinging;
+        private string _restoredNote;
 
         public MainForm(Catalog catalog, string catalogSource)
         {
@@ -45,6 +46,7 @@ namespace Ow2ServerPicker
 
             _gamePath = OverwatchLocator.Find();
             UpdateScope();
+            RestoreFromFirewall();
             RefreshStatus();
             UpdateSummary();
 
@@ -373,6 +375,69 @@ namespace Ow2ServerPicker
             return null;
         }
 
+        /// <summary>
+        /// Makes the opening state match the firewall rather than defaulting to
+        /// everything-checked. The firewall is the source of truth on purpose: a settings
+        /// file would drift the moment rules were changed by this app running elevated
+        /// elsewhere, removed by hand, or cleared by uninstall.
+        ///
+        /// Restored selections are always shown in "play only on checked" terms, because
+        /// that is what the rules actually encode - the set that stayed reachable. Which of
+        /// the two modes originally produced them is not recorded and does not matter, since
+        /// both reduce to the same block set.
+        /// </summary>
+        private void RestoreFromFirewall()
+        {
+            FirewallManager.ActiveState state;
+            try { state = FirewallManager.ReadActive(); }
+            catch { return; }              // status line already reports firewall trouble
+
+            if (state.RuleCount == 0) return;   // nothing applied: leave the all-checked default
+
+            _mode.SelectedIndex = 0;
+            _restoredNote = null;
+
+            if (state.PlayableCodes != null)
+            {
+                Dictionary<string, bool> playable = new Dictionary<string, bool>(
+                    StringComparer.OrdinalIgnoreCase);
+                foreach (string code in state.PlayableCodes) playable[code] = true;
+
+                int matched = 0;
+                foreach (ServerRow row in _rows)
+                {
+                    bool keep = playable.ContainsKey(row.Dc.Code);
+                    if (keep) matched++;
+                    row.SetChecked(keep);
+                }
+
+                // Codes in the rules that this catalog no longer knows about mean the two
+                // have diverged; say so instead of quietly showing a smaller selection.
+                if (matched != state.PlayableCodes.Count)
+                    _restoredNote = string.Format(
+                        "Restored from {0} active rule(s); {1} of {2} saved datacenter(s) are not in this catalog.",
+                        state.RuleCount, state.PlayableCodes.Count - matched, state.PlayableCodes.Count);
+                else
+                    _restoredNote = string.Format("Restored {0} playable datacenter(s) from {1} active rule(s).",
+                        matched, state.RuleCount);
+                return;
+            }
+
+            // No usable description - fall back to addresses. A datacenter counts as
+            // playable when none of its space is blocked.
+            int kept = 0;
+            foreach (ServerRow row in _rows)
+            {
+                List<Interval> survives = IpMath.Subtract(row.Dc.Ranges, state.Blocked);
+                bool keep = IpMath.TotalAddresses(survives) == IpMath.TotalAddresses(row.Dc.Ranges);
+                if (keep) kept++;
+                row.SetChecked(keep);
+            }
+            _restoredNote = string.Format(
+                "Restored {0} playable datacenter(s) from {1} rule(s) by address; "
+                + "overlapping datacenters may be approximate.", kept, state.RuleCount);
+        }
+
         /// <summary>Widths follow the viewport; the scrollbar is told how much content there is.</summary>
         private void LayoutList()
         {
@@ -642,6 +707,12 @@ namespace Ow2ServerPicker
             try
             {
                 int active = FirewallManager.ListOurRuleNames().Count;
+                if (!string.IsNullOrEmpty(_restoredNote))
+                {
+                    _footer.Text = _restoredNote;
+                    _restoredNote = null;   // shown once; later refreshes report live status
+                    return;
+                }
                 _footer.Text = string.Format("{0}   ·   {1} datacenters from {2}, updated {3}",
                     active == 0 ? "No blocks active" : active + " block rule(s) active",
                     _catalog.Datacenters.Count, Path.GetFileName(_catalogSource), _catalog.Updated);

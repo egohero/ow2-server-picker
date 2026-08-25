@@ -32,6 +32,75 @@ namespace Ow2ServerPicker
             return Activator.CreateInstance(t);
         }
 
+        /// <summary>What the firewall currently says, reconstructed from our own rules.</summary>
+        internal sealed class ActiveState
+        {
+            public int RuleCount;
+            /// <summary>Codes named in the rule description, or null if none could be read.</summary>
+            public List<string> PlayableCodes;
+            public List<Interval> Blocked = new List<Interval>();
+        }
+
+        private const string PlayableTag = "playable:";
+
+        /// <summary>
+        /// Reads the live rules back into something the UI can restore from.
+        ///
+        /// The description carries the playable datacenter codes verbatim, which is far more
+        /// reliable than inferring them from addresses: datacenter ranges overlap, so a
+        /// datacenter contained entirely within another's space is indistinguishable by
+        /// address alone. Addresses are parsed too, as a fallback when the description is
+        /// missing or has been edited by hand.
+        /// </summary>
+        public static ActiveState ReadActive()
+        {
+            ActiveState state = new ActiveState();
+            dynamic rules = CreatePolicy().Rules;
+
+            foreach (object o in (IEnumerable)rules)
+            {
+                string name = null, description = null, remote = null;
+                try
+                {
+                    dynamic r = o;
+                    name = r.Name as string;
+                    if (name == null || !name.StartsWith(RulePrefix, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    description = r.Description as string;
+                    remote = r.RemoteAddresses as string;
+                }
+                catch { continue; }
+
+                state.RuleCount++;
+
+                if (state.PlayableCodes == null && !string.IsNullOrEmpty(description))
+                {
+                    int at = description.IndexOf(PlayableTag, StringComparison.OrdinalIgnoreCase);
+                    if (at >= 0)
+                    {
+                        string list = description.Substring(at + PlayableTag.Length);
+                        List<string> codes = new List<string>();
+                        foreach (string part in list.Split(','))
+                        {
+                            string code = part.Trim();
+                            if (code.Length > 0) codes.Add(code);
+                        }
+                        if (codes.Count > 0) state.PlayableCodes = codes;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(remote)) continue;
+                foreach (string part in remote.Split(','))
+                {
+                    Interval iv;
+                    if (IpMath.TryParse(part.Trim(), out iv)) state.Blocked.Add(iv);
+                }
+            }
+
+            state.Blocked = IpMath.Merge(state.Blocked);
+            return state;
+        }
+
         public static List<string> ListOurRuleNames()
         {
             List<string> names = new List<string>();
