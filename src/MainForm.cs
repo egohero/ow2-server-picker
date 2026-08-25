@@ -131,27 +131,15 @@ namespace Ow2ServerPicker
         /// </summary>
         private static string VersionLine()
         {
-            try
-            {
-                Assembly a = Assembly.GetExecutingAssembly();
-                string v = a.GetName().Version.ToString(3);
-                string built = "";
-                try
-                {
-                    string loc = a.Location;
-                    if (!string.IsNullOrEmpty(loc) && File.Exists(loc))
-                        built = File.GetLastWriteTime(loc).ToString(" (built d MMM yyyy HH:mm)");
-                }
-                catch { }
-                return "v" + v + built;
-            }
-            catch { return ""; }
+            // Commit answers "which change is this?", build time answers "did my rebuild
+            // actually land?". A trailing + on the commit means it was built from a
+            // modified working tree, so it does not match that commit exactly.
+            return "v" + BuildInfo.Version + "  ·  " + BuildInfo.Commit + "  ·  built " + BuildInfo.Built;
         }
 
         private static string VersionShort()
         {
-            try { return "v" + Assembly.GetExecutingAssembly().GetName().Version.ToString(3); }
-            catch { return ""; }
+            return "v" + BuildInfo.Version;
         }
 
         /// <summary>

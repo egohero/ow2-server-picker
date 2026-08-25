@@ -8,8 +8,11 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyProduct("Overwatch 2 Server Picker")]
 [assembly: AssemblyCopyright("MIT licensed. Not affiliated with Blizzard Entertainment.")]
 
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
-[assembly: AssemblyInformationalVersion("1.0.0")]
+// Derived from git by tools/gen-version.ps1, not hand-maintained. const strings are
+// compile-time constants, so they are legal in attributes.
+[assembly: AssemblyVersion(Ow2ServerPicker.BuildInfo.Version)]
+[assembly: AssemblyFileVersion(Ow2ServerPicker.BuildInfo.Version)]
+[assembly: AssemblyInformationalVersion(
+    Ow2ServerPicker.BuildInfo.Version + " (" + Ow2ServerPicker.BuildInfo.Commit + ")")]
 
 [assembly: ComVisible(false)]

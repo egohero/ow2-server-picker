@@ -13,6 +13,9 @@ if not exist "%CSC%" (
 cd /d "%~dp0"
 if not exist build mkdir build
 
+rem Version is derived from git so it cannot go stale; see tools\gen-version.ps1.
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\gen-version.ps1 || exit /b 1
+
 "%CSC%" ^
     /nologo ^
     /target:winexe ^
