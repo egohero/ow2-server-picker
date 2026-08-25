@@ -115,11 +115,19 @@ can update ranges without waiting for a release.
 a live match:
 
 ```bash
-powershell -File tools\capture-server.ps1 capture -Seconds 45 -Lookup
+powershell -ExecutionPolicy Bypass -File tools\capture-server.ps1 -Seconds 45 -Lookup
 ```
 
 It filters to UDP, ranks peers by packet count (the game server dominates during a match), and
-pings each candidate. `-Lookup` resolves city and ISP, sending only the server IP to ipinfo.io.
+reports each candidate's address, **ports** and round-trip time. `-Lookup` resolves city and ISP,
+sending only the server IP to ipinfo.io.
+
+The ports column matters as much as the address: `gameUdpPorts` in `servers.json` must cover the
+game server's port or blocking silently stops working, which is a worse failure than blocking too
+much because nothing tells you.
+
+The script only observes — blocking is the app's job, because the app scopes its rules to the
+Overwatch executable, to UDP, and to the game port range.
 
 If you find a range that is not in `servers.json`, please open a PR adding it. Include the IP
 you observed and roughly where you are — that is what makes the entry checkable by someone else.
