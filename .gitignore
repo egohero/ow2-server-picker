@@ -1,0 +1,8 @@
+build/
+*.exe
+*.pdb
+*.user
+.vs/
+
+# local agent state
+.claude/
