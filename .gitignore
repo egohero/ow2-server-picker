@@ -4,8 +4,6 @@ build/
 *.user
 .vs/
 
-# local agent state
-.claude/
 
 # generated per build by tools/gen-version.ps1
 src/BuildInfo.generated.cs

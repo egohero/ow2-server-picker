@@ -220,7 +220,7 @@ tests\run-tests.cmd
 Version numbers are derived from git by `tools/gen-version.ps1`, so they can't go stale.
 
 📖 Architecture, the reasoning behind each design decision, and the traps found along the way
-are in **[AGENTS.md](AGENTS.md)**.
+are in **[DEVELOPMENT.md](DEVELOPMENT.md)**.
 
 The suite covers the interval arithmetic and sorting rules, and asserts against the real
 shipped catalog that a *"play only on Sydney"* selection leaves no Sydney address in the block
