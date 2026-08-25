@@ -7,7 +7,7 @@
       "code": "GTK1",
       "name": "Japan (Tokyo)",
       "region": "Asia",
-      "pingTarget": null,
+      "pingTarget": "34.84.0.3",
       "ranges": [
         "34.85.0.0-34.85.127.255",
         "34.84.0.0-34.84.255.255",
@@ -50,7 +50,7 @@
       "code": "GSG1",
       "name": "Singapore",
       "region": "Asia",
-      "pingTarget": null,
+      "pingTarget": "34.87.0.193",
       "ranges": [
         "34.124.0.0-34.124.255.255",
         "34.124.42.0-34.124.43.255",
@@ -117,7 +117,7 @@
       "code": "ICN1",
       "name": "South Korea (Incheon)",
       "region": "Asia",
-      "pingTarget": "211.234.110.1",
+      "pingTarget": "117.52.0.129",
       "ranges": [
         "121.254.0.0-121.254.255.255",
         "117.52.0.0-117.52.255.255",
@@ -128,7 +128,7 @@
       "code": "GAN3",
       "name": "South Korea 3",
       "region": "Asia",
-      "pingTarget": null,
+      "pingTarget": "34.22.64.129",
       "ranges": [
         "34.64.0.0-34.64.255.255",
         "121.254.0.0-121.254.255.255",
@@ -154,7 +154,7 @@
       "code": "TPE1",
       "name": "Taiwan (Taipei)",
       "region": "Asia",
-      "pingTarget": null,
+      "pingTarget": "35.221.128.1",
       "ranges": [
         "5.42.160.0-5.42.160.255",
         "35.221.128.0/17"
@@ -164,7 +164,7 @@
       "code": "GEN1",
       "name": "Finland",
       "region": "Europe",
-      "pingTarget": null,
+      "pingTarget": "34.88.1.1",
       "ranges": [
         "34.88.0.0/16",
         "34.104.96.0/21",
@@ -180,7 +180,7 @@
       "code": "AMS1",
       "name": "Netherlands (Amsterdam)",
       "region": "Europe",
-      "pingTarget": "185.60.114.159",
+      "pingTarget": null,
       "ranges": [
         "5.42.168.0-5.42.175.255",
         "64.224.26.0/23"
@@ -202,7 +202,7 @@
       "code": "GMEC1",
       "name": "Qatar",
       "region": "Middle East",
-      "pingTarget": null,
+      "pingTarget": "34.1.33.1",
       "ranges": [
         "34.1.32.0/20",
         "34.18.0.0/16",
@@ -214,7 +214,7 @@
       "code": "GMEC2",
       "name": "Saudi Arabia",
       "region": "Middle East",
-      "pingTarget": null,
+      "pingTarget": "34.1.48.130",
       "ranges": [
         "34.1.48.0/20",
         "34.152.84.0/23",
@@ -238,7 +238,7 @@
       "code": "ORD1",
       "name": "USA Central (Chicago)",
       "region": "North America",
-      "pingTarget": "24.105.62.129",
+      "pingTarget": "23.236.48.65",
       "ranges": [
         "24.105.40.0-24.105.47.255",
         "64.224.0.0/21",
@@ -325,7 +325,7 @@
       "code": "LAX1",
       "name": "USA West (Los Angeles)",
       "region": "North America",
-      "pingTarget": "24.105.30.129",
+      "pingTarget": "34.124.0.129",
       "ranges": [
         "64.224.24.0/23",
         "24.105.8.0-24.105.15.255",
@@ -336,7 +336,7 @@
       "code": "GUW2",
       "name": "USA West 2",
       "region": "North America",
-      "pingTarget": null,
+      "pingTarget": "34.16.128.129",
       "ranges": [
         "35.247.0.0/17",
         "35.236.0.0/17",
@@ -396,7 +396,7 @@
       "code": "SYD2",
       "name": "Australia (Sydney)",
       "region": "Oceania",
-      "pingTarget": "172.105.168.123",
+      "pingTarget": "34.104.105.1",
       "ranges": [
         "158.115.196.0/23",
         "37.244.42.0-37.244.42.255",
@@ -425,7 +425,7 @@
       "code": "GBR1",
       "name": "Brazil (Sao Paulo)",
       "region": "South America",
-      "pingTarget": null,
+      "pingTarget": "34.127.178.3",
       "ranges": [
         "34.95.128.0/17",
         "34.104.80.0/21",

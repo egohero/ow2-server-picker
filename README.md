@@ -67,8 +67,10 @@ powershell -Command "Get-NetFirewallRule -DisplayName 'OW2ServerPicker*' | Forma
    want and everything else gets blocked. **Block checked servers** is the inverse, for when
    you only want to exclude one or two.
 2. Optionally hit **Ping all** to see which datacenters are actually close to you. Entries
-   showing `-` have no probe address in `servers.json`; `n/a` means the probe did not answer
-   ICMP, which is common and does not mean the datacenter is unreachable.
+   showing `–` have no verified probe address in `servers.json`; `n/a` means the probe did not
+   answer ICMP. Neither means the datacenter is unreachable — cloud edges routinely drop or
+   rate-limit ICMP, while the game itself talks UDP and connects fine. The ping column is a
+   convenience for choosing servers, not a reachability test.
 3. **Apply**, then fully quit and relaunch Overwatch.
 
 Everything starts checked, which means "block nothing" — an accidental Apply on first launch
