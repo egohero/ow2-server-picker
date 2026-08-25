@@ -60,6 +60,14 @@ supported way to verify or extend the catalog.
 
 ## Verification status
 
-Verified locally on Windows 11: build, all 30 unit assertions, firewall COM probe, form
-construction. **The live firewall write path (`Rules.Add`) has not been executed** — it needs
-elevation and would create real rules. The GitHub Actions workflow has not been run.
+Verified on Windows 11 (2026-08-26): build, all 30 unit assertions, firewall COM probe, form
+construction, and the **live apply path end to end** — `FirewallManager.Apply` with a real
+"SYD2 only" selection produced one rule (`OW2ServerPicker-01`, outbound / block / UDP / 149
+ranges) scoped to `D:\Program Files (x86)\Overwatch\_retail_\Overwatch.exe`.
+
+Cross-checked two ways rather than trusting the writing API: read back via `Get-NetFirewallRule`
+(NetSecurity module, independent of the COM path that created it), then all 63 SYD2 boundary and
+midpoint addresses probed against the live rule's actual `RemoteAddress` list — none blocked.
+
+Still unverified: the **GitHub Actions workflow has never run**, in particular whether
+`FormSmoke` can create a window on a `windows-latest` runner.
