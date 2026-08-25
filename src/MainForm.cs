@@ -65,6 +65,7 @@ namespace Ow2ServerPicker
         private void BuildUi()
         {
             Text = "Overwatch 2 Server Picker";
+            LoadAppIcon();
             // Sizing is driven by measured text and Theme.S(), so the framework must not
             // also scale things - that double-application is what clipped the old labels.
             AutoScaleMode = AutoScaleMode.None;
@@ -113,6 +114,22 @@ namespace Ow2ServerPicker
 
             Controls.Add(root);
             Controls.Add(_footer);
+        }
+
+        /// <summary>
+        /// /win32icon gives the exe its Explorer icon, but WinForms still shows its own
+        /// default in the title bar unless Form.Icon is set, so the same .ico is embedded
+        /// as a managed resource and loaded here. Absent in test builds, hence the guard.
+        /// </summary>
+        private void LoadAppIcon()
+        {
+            try
+            {
+                using (Stream s = System.Reflection.Assembly.GetExecutingAssembly()
+                           .GetManifestResourceStream("app.ico"))
+                    if (s != null) Icon = new Icon(s);
+            }
+            catch { }
         }
 
         /// <summary>Stacks labels top-down, each taking its own measured height.</summary>

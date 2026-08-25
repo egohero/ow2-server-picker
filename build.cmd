@@ -21,7 +21,9 @@ if not exist build mkdir build
     /warnaserror- ^
     /out:build\Ow2ServerPicker.exe ^
     /win32manifest:src\app.manifest ^
+    /win32icon:assets\app.ico ^
     /resource:data\servers.json,servers.json ^
+    /resource:assets\app.ico,app.ico ^
     /reference:System.dll ^
     /reference:System.Core.dll ^
     /reference:System.Drawing.dll ^
