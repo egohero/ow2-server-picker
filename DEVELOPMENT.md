@@ -98,6 +98,32 @@ Probe-selection rules, each of which exists because the naive version was wrong:
 Ping readings are best-effort regional estimates, not a reachability test — ICMP is widely
 dropped at cloud edges while the game's UDP traffic connects fine.
 
+## Limiting the blast radius
+
+Rules are narrowed on three axes so a block hits game traffic and nothing else:
+
+1. **Protocol** — UDP only. Battle.net login, social and patching are TCP (443, 1119, 3724)
+   and are never touched.
+2. **Program** — `rule.ApplicationName` pins every rule to the Overwatch client, so shared
+   cloud addresses stay reachable for everything else on the machine.
+3. **Port** — `rule.RemotePorts` is set from `gameUdpPorts` in `servers.json`
+   (`6250,12000-64000`). Without it the rule blocks *every* UDP port to those addresses,
+   which takes QUIC/HTTP3 (443), voice STUN/TURN (3478-3479), voice SIP (5060/5062) and DNS
+   down with the game traffic. This was a real incident: a user crashed on match join while a
+   whitelist rule was blocking all UDP ports to 708K addresses of Blizzard's own network.
+
+Beware the difference in blast radius between the two modes — it is much larger than it looks:
+
+| Selection | Addresses | Blizzard-owned |
+|---|---|---|
+| allow only SYD2 | 6,176,512 | 708,352 (32 ranges) |
+| block only GSG1 |   461,568 | 0 |
+
+`34.x`/`35.x` are Google Cloud, where the game servers run. Everything else in the catalog is
+Blizzard's own network, which carries backend services too — blocking those ranges is the
+risky half, and a whitelist sweeps them all in. Prefer blocking the few datacenters a user
+wants to avoid over whitelisting the one they want.
+
 ## Finding the game
 
 Scope rules to the **client**, never the launcher. `Overwatch Launcher.exe` (~5 MB) reads a

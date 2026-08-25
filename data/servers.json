@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "updated": "2026-08-26",
+  "gameUdpPorts": "6250,12000-64000",
   "note": "Ranges are community-observed, not published by Blizzard. Verify with tools/capture-server.ps1 and open a PR when they drift.",
   "datacenters": [
     {

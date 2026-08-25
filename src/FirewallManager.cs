@@ -141,7 +141,7 @@ namespace Ow2ServerPicker
         /// Pass a non-null programPath to confine the block to that executable, which keeps the
         /// rules from touching anything else on the machine that shares those addresses.
         /// </summary>
-        public static int Apply(List<Interval> blocked, string programPath, string summary)
+        public static int Apply(List<Interval> blocked, string programPath, string summary, string udpPorts)
         {
             RemoveAll();
             if (blocked == null || blocked.Count == 0) return 0;
@@ -165,6 +165,9 @@ namespace Ow2ServerPicker
                 rule.Direction = DirectionOut;
                 rule.Action = ActionBlock;
                 rule.RemoteAddresses = string.Join(",", parts);
+                // Without this the rule blocks every UDP port to those addresses, which
+                // takes QUIC, voice and DNS down with the game traffic.
+                if (!string.IsNullOrEmpty(udpPorts)) rule.RemotePorts = udpPorts;
                 rule.Profiles = ProfileAll;
                 rule.Enabled = true;
                 if (!string.IsNullOrEmpty(programPath))

@@ -53,6 +53,15 @@ namespace Ow2ServerPicker
                 string joined = string.Join(",", parts);
                 rule.RemoteAddresses = joined;
 
+                // Port scoping is what keeps the block off QUIC, voice and DNS, so the COM
+                // API has to accept this syntax - it validates on assignment.
+                string ports = string.IsNullOrEmpty(cat.GameUdpPorts) ? "6250,12000-64000" : cat.GameUdpPorts;
+                rule.RemotePorts = ports;
+                string portsBack = rule.RemotePorts as string;
+                Console.WriteLine("ports in   : {0}", ports);
+                Console.WriteLine("ports out  : {0}", portsBack);
+                if (string.IsNullOrEmpty(portsBack)) { Console.WriteLine("FAIL: RemotePorts did not persist"); failed++; }
+
                 Console.WriteLine("assigned {0} intervals ({1} chars)", chunk, joined.Length);
 
                 string readBack = rule.RemoteAddresses as string;

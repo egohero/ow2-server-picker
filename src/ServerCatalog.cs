@@ -31,6 +31,14 @@ namespace Ow2ServerPicker
     internal sealed class Catalog
     {
         public string Updated = "unknown";
+
+        /// <summary>
+        /// UDP ports the game server uses, as a Windows Firewall port list. Rules are scoped
+        /// to these so the block cannot touch QUIC (443), voice STUN/SIP or DNS, which live on
+        /// the same addresses but are not game traffic. Empty means every port, which is the
+        /// old, blunter behaviour.
+        /// </summary>
+        public string GameUdpPorts = "";
         public List<Datacenter> Datacenters = new List<Datacenter>();
         public List<string> Warnings = new List<string>();
 
@@ -79,6 +87,9 @@ namespace Ow2ServerPicker
             Catalog cat = new Catalog();
             string updated = Str(root, "updated");
             if (!string.IsNullOrEmpty(updated)) cat.Updated = updated;
+
+            string ports = Str(root, "gameUdpPorts");
+            if (!string.IsNullOrEmpty(ports)) cat.GameUdpPorts = ports.Trim();
 
             object dcsObj;
             if (!root.TryGetValue("datacenters", out dcsObj) || !(dcsObj is object[]))

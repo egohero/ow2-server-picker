@@ -672,7 +672,8 @@ namespace Ow2ServerPicker
             {
                 Cursor = Cursors.WaitCursor;
                 int rules = FirewallManager.Apply(blocked, _gamePath,
-                    "Overwatch 2 Server Picker - playable: " + string.Join(", ", keptNames.ToArray()));
+                    "Overwatch 2 Server Picker - playable: " + string.Join(", ", keptNames.ToArray()),
+                    _catalog.GameUdpPorts);
                 RefreshStatus();
                 MessageBox.Show(this,
                     string.Format("Created {0} firewall rule(s).\r\n\r\nPlayable: {1}\r\n\r\n"
