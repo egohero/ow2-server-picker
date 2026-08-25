@@ -7,6 +7,11 @@ if not exist "%CSC%" echo ERROR: in-box C# compiler not found & exit /b 1
 cd /d "%~dp0.."
 if not exist build\tests mkdir build\tests
 
+rem src\BuildInfo.generated.cs is gitignored, so on a clean checkout it does not exist yet
+rem and anything compiling src\*.cs fails. Generate it here as well as in build.cmd.
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\gen-version.ps1 >nul
+if errorlevel 1 (echo ERROR: could not generate version info & exit /b 1)
+
 set "REFS=/reference:System.dll /reference:System.Core.dll /reference:System.Web.Extensions.dll /reference:Microsoft.CSharp.dll"
 set "GUIREFS=%REFS% /reference:System.Drawing.dll /reference:System.Windows.Forms.dll"
 set "FAILED=0"
