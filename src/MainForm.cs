@@ -32,6 +32,7 @@ namespace Ow2ServerPicker
         private FlatBtn _locate;
 
         private string _gamePath;
+        private string _gamePathSource;
         private bool _pinging;
         private string _restoredNote;
 
@@ -44,7 +45,8 @@ namespace Ow2ServerPicker
             BuildUi();
             Populate();
 
-            _gamePath = OverwatchLocator.Find();
+            Located found = OverwatchLocator.Locate();
+            if (found != null) { _gamePath = found.Path; _gamePathSource = found.Source; }
             UpdateScope();
             RestoreFromFirewall();
             RefreshStatus();
@@ -558,7 +560,11 @@ namespace Ow2ServerPicker
             else
             {
                 _scopeLabel.ForeColor = Theme.TextFaint;
-                _scopeLabel.Text = "Scoped to " + _gamePath;
+                // Naming the source matters: users see a Battle.net shortcut pointing at
+                // "Overwatch Launcher.exe" and reasonably wonder why this says _retail_.
+                _scopeLabel.Text = string.IsNullOrEmpty(_gamePathSource)
+                    ? "Scoped to " + _gamePath
+                    : "Scoped to " + _gamePath + "   (found via " + _gamePathSource + ")";
             }
         }
 
@@ -630,6 +636,7 @@ namespace Ow2ServerPicker
                 if (dlg.ShowDialog(this) == DialogResult.OK)
                 {
                     _gamePath = dlg.FileName;
+                    _gamePathSource = "chosen by you";
                     UpdateScope();
                 }
             }

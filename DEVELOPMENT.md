@@ -98,6 +98,33 @@ Probe-selection rules, each of which exists because the naive version was wrong:
 Ping readings are best-effort regional estimates, not a reachability test — ICMP is widely
 dropped at cloud edges while the game's UDP traffic connects fine.
 
+## Finding the game
+
+Scope rules to the **client**, never the launcher. `Overwatch Launcher.exe` (~5 MB) reads a
+product code, starts the matching flavour and exits; the client that talks to datacenters is
+`<install>\_retail_\Overwatch.exe` (~65 MB). Battle.net's own Start Menu shortcut points at
+the launcher with `--productcode=pro`, so users reasonably ask why this app names a different
+file — hence `Located.Source`, shown in the UI.
+
+`OverwatchLocator` tries, in order: running game process → Battle.net Agent `product.db` →
+registry `DisplayIcon` → folder scan. Every candidate must pass `File.Exists`, and anything
+named `*Launcher*` is rejected outright.
+
+Useful facts, all verified on a live install:
+- Overwatch's Blizzard codename is **`prometheus`**; that is the key in
+  `%APPDATA%\Battle.net\Battle.net.config` and in Agent's `product.db`.
+- `%PROGRAMDATA%\Battle.net\Agent\product.db` is protobuf but stores install roots and the
+  flavour subfolder as plain strings, so they can be pulled out by pattern and then validated
+  against the filesystem.
+- The Uninstall key's **`DisplayIcon`** is the client exe path directly, which beats guessing
+  subfolders off `InstallLocation`.
+- `_retail_\.flavor.info` and `.build.info` map the product code (`pro`) to the flavour.
+
+Do not try to infer networking from the client's PE imports: it is packed, exposes no version
+info and resolves imports at runtime, so a string or import scan finds no `WS2_32` and proves
+nothing. The real check is `Get-NetUDPEndpoint` against the running process — confirmed that
+`_retail_\Overwatch.exe` owns the UDP endpoints while the launcher has already exited.
+
 ## State restore
 
 On launch, `RestoreFromFirewall()` reconstructs the selection from the live rules instead of
